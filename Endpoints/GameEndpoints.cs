@@ -74,6 +74,7 @@ public static class GameEndpoints
 
         GAMEGROUP.MapPost("/add", (CreateGameDto newGame) =>
         {
+
             GameDto game = new(
                 games.Count + 1,
                 newGame.name,
@@ -85,7 +86,8 @@ public static class GameEndpoints
 
             games.Add(game);
             return Results.CreatedAtRoute(GetGameEndpointName, new { id = game.Id }, game);
-        });
+        })
+        .WithParameterValidation();
 
         GAMEGROUP.MapPatch("/{id}", (int id, UpdateGameDto updatedFields) =>
         {
@@ -113,7 +115,8 @@ public static class GameEndpoints
             games[index] = updatedGame;
 
             return Results.Ok(updatedGame);
-        });
+        })
+        .WithParameterValidation();
 
         GAMEGROUP.MapDelete("/{id}", (int id) =>
         {
