@@ -14,12 +14,11 @@ POST http://localhost:5285/games/add
 Content-Type: application/json
 
 {
-    "name": "Half-Life",
-    "genre": "Shooter",
+    "Name": "Minecraft",
+    "genreId" : 1,
     "price": 55,
     "releaseDate": "1998-11-19"
 }
-
 
 ###
 PATCH  http://localhost:5285/games/4

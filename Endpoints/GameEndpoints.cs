@@ -1,4 +1,6 @@
+using GameStoreApi.Data;
 using GameStoreApi.Dtos;
+using GameStoreApi.Entities;
 
 namespace GameStoreApi.EndPoints;
 
@@ -72,20 +74,31 @@ public static class GameEndpoints
 
         GAMEGROUP.MapGet("/inActive", () => games.Where(g => !g.isActive).ToList());
 
-        GAMEGROUP.MapPost("/add", (CreateGameDto newGame) =>
+        GAMEGROUP.MapPost("/add", (CreateGameDto newGame , GameStoreContext dbContext) =>
         {
 
-            GameDto game = new(
-                games.Count + 1,
-                newGame.name,
-                newGame.Genre,
-                newGame.Price,
-                newGame.ReleaseDate,
-                true
+            Game game = new(){
+                Name = newGame.Name,
+                genre = dbContext.Genres.Find(newGame.GenreId),
+                GenreId = newGame.GenreId,
+                Price  = newGame.Price,
+                ReleaseDate = newGame.ReleaseDate
+                
+            };
+
+            dbContext.Games.Add(game);
+            dbContext.SaveChanges();
+
+            GameDto gameDto = new (
+                game.Id,
+                game.Name,
+                game.genre!.Name,
+                game.Price,
+                game.ReleaseDate,
+                isActive : true
             );
 
-            games.Add(game);
-            return Results.CreatedAtRoute(GetGameEndpointName, new { id = game.Id }, game);
+            return Results.CreatedAtRoute(GetGameEndpointName, new { id = game.Id }, gameDto);
         })
         .WithParameterValidation();
 
@@ -104,7 +117,7 @@ public static class GameEndpoints
             // Create a new GameDto with updated fields or keep existing values
             var updatedGame = game with
             {
-                name = updatedFields.name ?? game.name,
+                Name = updatedFields.name ?? game.Name,
                 Genre = updatedFields.Genre ?? game.Genre,
                 Price = updatedFields.Price ?? game.Price,
                 ReleaseDate = updatedFields.ReleaseDate ?? game.ReleaseDate,
