@@ -2,6 +2,7 @@ using GameStoreApi.Data;
 using GameStoreApi.Dtos;
 using GameStoreApi.Entities;
 using GameStoreApi.Mapping;
+using Microsoft.EntityFrameworkCore;
 
 namespace GameStoreApi.EndPoints;
 
@@ -9,7 +10,7 @@ public static class GameEndpoints
 {
     const string GetGameEndpointName = "GetGame";
 
-    private static readonly List<GameDto> games = [
+    private static readonly List<GameSummaryDto> games = [
     new (
         1,
         "Street Fighter II",
@@ -58,47 +59,73 @@ public static class GameEndpoints
         new DateOnly(1999, 9, 30),
         false
     ),
-];  
+];
 
     public static RouteGroupBuilder MapGamesEndpoints(this WebApplication app)
     {
 
         var GAMEGROUP = app.MapGroup("games");
 
-        GAMEGROUP.MapGet("/", () => games);
+        GAMEGROUP.MapGet("/", async (GameStoreContext dbContext) =>
+        {
+            GameSummaryDto[] allGames = await dbContext.Games
+            .AsNoTracking()
+            .Include(x => x.genre)
+            .Select(g => g.ToGameSummaryDto())
+            .ToArrayAsync();
+            if (!allGames.Any())
+            {
+                return Results.NotFound(new { Message = "No games found in DB" });
+            }
 
+            return Results.Ok(allGames);
+        });
 
-        GAMEGROUP.MapGet("/{id}",
-        (int id) => games.Find(g => g.Id == id)).WithName(GetGameEndpointName);
+        GAMEGROUP.MapGet("/{id}",async(int id, GameStoreContext dbContext) =>
+            {
+                Game? game = await dbContext.Games.FindAsync(id);
+                return game is null ? Results.NotFound() : Results.Ok(game.ToGameDetailsDto());
+            })
+            .WithName(GetGameEndpointName);
 
-        GAMEGROUP.MapGet("/active", () => games.Where(g => g.isActive).ToList());
+        GAMEGROUP.MapGet("/active", async (GameStoreContext dbContext) =>{
+                GameSummaryDto[] activeGames = await dbContext.Games
+                    .AsNoTracking()
+                    .Where(x => x.isActive)
+                    .Include(x => x.genre)
+                    .Select(x => x.ToGameSummaryDto())
+                    .ToArrayAsync();
 
-        GAMEGROUP.MapGet("/inActive", () => games.Where(g => !g.isActive).ToList());
+                return activeGames.Length > 0
+                    ? Results.Ok(activeGames)
+                    : Results.NotFound(new { Message = "No active games found in DB" });
+        });
 
-        GAMEGROUP.MapPost("/add", (CreateGameDto newGame , GameStoreContext dbContext) =>
+        GAMEGROUP.MapGet("/inActive", async (GameStoreContext dbContext) =>
+            {
+                GameSummaryDto[] inActiveGames = await dbContext.Games
+                .AsNoTracking()
+                    .Where(x => !x.isActive)
+                    .Include(x => x.genre)
+                    .Select(x => x.ToGameSummaryDto())
+                    .ToArrayAsync();
+                return inActiveGames.Length > 0 
+                    ? Results.Ok(new { message = "Inactive games fetched", data = inActiveGames })
+                    : Results.NotFound(new { message = "No inactive games found in DB" });
+            });
+
+        GAMEGROUP.MapPost("/add", (CreateGameDto newGame, GameStoreContext dbContext) =>
         {
             Game game = newGame.ToEntity();
-            game.genre = dbContext.Genres.Find(newGame.GenreId);
-
-            
 
             dbContext.Games.Add(game);
             dbContext.SaveChanges();
 
-            GameDto gameDto = new (
-                game.Id,
-                game.Name,
-                game.genre!.Name,
-                game.Price,
-                game.ReleaseDate,
-                isActive : true
-            );
-
-            return Results.CreatedAtRoute(GetGameEndpointName, new { id = game.Id }, game.ToDto());
+            return Results.CreatedAtRoute(GetGameEndpointName, new { id = game.Id }, game.ToGameDetailsDto());
         })
         .WithParameterValidation();
 
-        GAMEGROUP.MapPatch("/{id}", (int id, UpdateGameDto updatedFields) =>
+        GAMEGROUP.MapPatch("/{id}", (int id, UpdateGameDto updatedFields, GameStoreContext dbContext) =>
         {
             if (id <= -1)
             {
@@ -127,19 +154,20 @@ public static class GameEndpoints
         })
         .WithParameterValidation();
 
-        GAMEGROUP.MapDelete("/{id}", (int id) =>
-        {
-            if (id == -1)
-            {
-                return Results.NotFound();
+        GAMEGROUP.MapDelete("/{id}", async (int id , GameStoreContext dbContext ) =>{
+            if(id <= 0){
+                return Results.BadRequest(new {message= "Enter a valid id"});
             }
-            var game = games.Find(g => g.Id == id);
-            if (game is null)
-            {
-                return Results.NotFound();
+            
+            var gameToDelete = await dbContext.Games.FindAsync(id);
+            if(gameToDelete is null){
+                return Results.NotFound( new { message = "Game not found"}  );
             }
-            games.Remove(game);
-            return Results.NoContent();
+
+            dbContext.Games.Remove(gameToDelete);
+            await dbContext.SaveChangesAsync();
+
+            return Results.Ok(new {message= "Game deleted successfully"});
         });
 
         return GAMEGROUP;

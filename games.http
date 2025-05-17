@@ -1,7 +1,7 @@
 GET http://localhost:5285/games
 
 ###
-GET http://localhost:5285/games/3
+GET http://localhost:5285/games/4
 
 ###
 GET http://localhost:5285/games/active
@@ -30,11 +30,7 @@ Content-Type: application/json
 }
 
 ###
-DELETE   http://localhost:5285/games/7
+DELETE   http://localhost:5285/games/2
 Content-Type: application/json
-
-{
-    "price": 89.99
-}
 
 
